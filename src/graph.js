@@ -1,162 +1,184 @@
-// Graph — adjacency list with BFS, DFS, Dijkstra, topological sort, cycle detection
+// graph.js — Graph data structure with algorithms
 
 export class Graph {
-  constructor(directed = false) {
-    this.adjacency = new Map();
+  constructor({ directed = false } = {}) {
     this.directed = directed;
+    this._adj = new Map(); // node → [{node, weight}]
   }
 
-  addVertex(v) { if (!this.adjacency.has(v)) this.adjacency.set(v, []); return this; }
-  removeVertex(v) { this.adjacency.delete(v); for (const [, edges] of this.adjacency) { const idx = edges.findIndex(e => e.to === v); while (idx >= 0) { edges.splice(edges.findIndex(e => e.to === v), 1); } } return this; }
+  addNode(node) {
+    if (!this._adj.has(node)) this._adj.set(node, []);
+    return this;
+  }
 
   addEdge(from, to, weight = 1) {
-    this.addVertex(from).addVertex(to);
-    this.adjacency.get(from).push({ to, weight });
-    if (!this.directed) this.adjacency.get(to).push({ to: from, weight });
+    this.addNode(from).addNode(to);
+    this._adj.get(from).push({ node: to, weight });
+    if (!this.directed) this._adj.get(to).push({ node: from, weight });
+    return this;
+  }
+
+  removeNode(node) {
+    this._adj.delete(node);
+    for (const [, edges] of this._adj) {
+      const idx = edges.findIndex(e => e.node === node);
+      if (idx !== -1) edges.splice(idx, 1);
+    }
     return this;
   }
 
   removeEdge(from, to) {
-    const edges = this.adjacency.get(from);
-    if (edges) { const idx = edges.findIndex(e => e.to === to); if (idx >= 0) edges.splice(idx, 1); }
-    if (!this.directed) { const edges2 = this.adjacency.get(to); if (edges2) { const idx = edges2.findIndex(e => e.to === from); if (idx >= 0) edges2.splice(idx, 1); } }
+    const edges = this._adj.get(from);
+    if (edges) {
+      const idx = edges.findIndex(e => e.node === to);
+      if (idx !== -1) edges.splice(idx, 1);
+    }
+    if (!this.directed) {
+      const edges2 = this._adj.get(to);
+      if (edges2) {
+        const idx = edges2.findIndex(e => e.node === from);
+        if (idx !== -1) edges2.splice(idx, 1);
+      }
+    }
     return this;
   }
 
-  hasVertex(v) { return this.adjacency.has(v); }
-  hasEdge(from, to) { const edges = this.adjacency.get(from); return edges ? edges.some(e => e.to === to) : false; }
-  neighbors(v) { return (this.adjacency.get(v) || []).map(e => e.to); }
-  get vertices() { return [...this.adjacency.keys()]; }
-  get vertexCount() { return this.adjacency.size; }
-  get edgeCount() { let c = 0; for (const [, e] of this.adjacency) c += e.length; return this.directed ? c : c / 2; }
+  neighbors(node) {
+    return (this._adj.get(node) || []).map(e => e.node);
+  }
 
-  // BFS
-  bfs(start, visit) {
+  hasNode(node) { return this._adj.has(node); }
+  hasEdge(from, to) { return (this._adj.get(from) || []).some(e => e.node === to); }
+  get nodes() { return [...this._adj.keys()]; }
+  get nodeCount() { return this._adj.size; }
+  get edgeCount() {
+    let count = 0;
+    for (const [, edges] of this._adj) count += edges.length;
+    return this.directed ? count : count / 2;
+  }
+
+  // BFS: returns nodes in breadth-first order
+  bfs(start) {
     const visited = new Set([start]);
     const queue = [start];
     const order = [];
-    while (queue.length) {
-      const v = queue.shift();
-      order.push(v);
-      if (visit) visit(v);
-      for (const { to } of this.adjacency.get(v) || []) {
-        if (!visited.has(to)) { visited.add(to); queue.push(to); }
+    while (queue.length > 0) {
+      const node = queue.shift();
+      order.push(node);
+      for (const { node: neighbor } of this._adj.get(node) || []) {
+        if (!visited.has(neighbor)) {
+          visited.add(neighbor);
+          queue.push(neighbor);
+        }
       }
     }
     return order;
   }
 
-  // DFS
-  dfs(start, visit) {
+  // DFS: returns nodes in depth-first order
+  dfs(start) {
     const visited = new Set();
     const order = [];
-    const stack = [start];
-    while (stack.length) {
-      const v = stack.pop();
-      if (visited.has(v)) continue;
-      visited.add(v);
-      order.push(v);
-      if (visit) visit(v);
-      for (const { to } of (this.adjacency.get(v) || []).slice().reverse()) {
-        if (!visited.has(to)) stack.push(to);
+    const visit = (node) => {
+      if (visited.has(node)) return;
+      visited.add(node);
+      order.push(node);
+      for (const { node: neighbor } of this._adj.get(node) || []) {
+        visit(neighbor);
       }
-    }
+    };
+    visit(start);
     return order;
   }
 
-  // Dijkstra (shortest path)
+  // Dijkstra's shortest path
   dijkstra(start) {
     const dist = new Map();
     const prev = new Map();
     const visited = new Set();
 
-    for (const v of this.adjacency.keys()) dist.set(v, Infinity);
+    for (const node of this._adj.keys()) dist.set(node, Infinity);
     dist.set(start, 0);
 
     while (true) {
-      let u = null, minDist = Infinity;
-      for (const [v, d] of dist) {
-        if (!visited.has(v) && d < minDist) { u = v; minDist = d; }
+      // Find unvisited node with smallest distance
+      let minNode = null, minDist = Infinity;
+      for (const [node, d] of dist) {
+        if (!visited.has(node) && d < minDist) { minNode = node; minDist = d; }
       }
-      if (u === null) break;
-      visited.add(u);
+      if (minNode === null) break;
 
-      for (const { to, weight } of this.adjacency.get(u) || []) {
-        const alt = dist.get(u) + weight;
-        if (alt < dist.get(to)) { dist.set(to, alt); prev.set(to, u); }
+      visited.add(minNode);
+      for (const { node: neighbor, weight } of this._adj.get(minNode) || []) {
+        const alt = dist.get(minNode) + weight;
+        if (alt < dist.get(neighbor)) {
+          dist.set(neighbor, alt);
+          prev.set(neighbor, minNode);
+        }
       }
     }
 
-    return { dist, prev, pathTo: (target) => {
-      const path = [];
-      let cur = target;
-      while (cur !== undefined) { path.unshift(cur); cur = prev.get(cur); }
-      return path[0] === start ? path : [];
-    }};
+    return {
+      distances: Object.fromEntries(dist),
+      path(to) {
+        const p = [];
+        let node = to;
+        while (node !== undefined) { p.unshift(node); node = prev.get(node); }
+        return p[0] === start ? p : [];
+      },
+    };
   }
 
-  // Topological sort (directed only)
+  // Topological sort (directed graphs only)
   topologicalSort() {
     if (!this.directed) throw new Error('Topological sort requires directed graph');
     const visited = new Set();
-    const stack = [];
+    const temp = new Set();
+    const order = [];
+    let hasCycle = false;
 
-    const dfs = (v) => {
-      visited.add(v);
-      for (const { to } of this.adjacency.get(v) || []) {
-        if (!visited.has(to)) dfs(to);
-      }
-      stack.push(v);
+    const visit = (node) => {
+      if (temp.has(node)) { hasCycle = true; return; }
+      if (visited.has(node)) return;
+      temp.add(node);
+      for (const { node: neighbor } of this._adj.get(node) || []) visit(neighbor);
+      temp.delete(node);
+      visited.add(node);
+      order.unshift(node);
     };
 
-    for (const v of this.adjacency.keys()) {
-      if (!visited.has(v)) dfs(v);
-    }
-
-    return stack.reverse();
+    for (const node of this._adj.keys()) visit(node);
+    if (hasCycle) return null;
+    return order;
   }
 
-  // Detect cycle
+  // Cycle detection
   hasCycle() {
-    if (this.directed) {
-      const white = new Set(this.adjacency.keys());
-      const gray = new Set();
-      const dfs = (v) => {
-        white.delete(v); gray.add(v);
-        for (const { to } of this.adjacency.get(v) || []) {
-          if (gray.has(to)) return true;
-          if (white.has(to) && dfs(to)) return true;
-        }
-        gray.delete(v);
-        return false;
-      };
-      for (const v of [...white]) { if (dfs(v)) return true; }
-      return false;
-    } else {
-      const visited = new Set();
-      const dfs = (v, parent) => {
-        visited.add(v);
-        for (const { to } of this.adjacency.get(v) || []) {
-          if (!visited.has(to)) { if (dfs(to, v)) return true; }
-          else if (to !== parent) return true;
-        }
-        return false;
-      };
-      for (const v of this.adjacency.keys()) {
-        if (!visited.has(v) && dfs(v, null)) return true;
+    if (this.directed) return this.topologicalSort() === null;
+    const visited = new Set();
+    const check = (node, parent) => {
+      visited.add(node);
+      for (const { node: neighbor } of this._adj.get(node) || []) {
+        if (!visited.has(neighbor)) {
+          if (check(neighbor, node)) return true;
+        } else if (neighbor !== parent) return true;
       }
       return false;
+    };
+    for (const node of this._adj.keys()) {
+      if (!visited.has(node) && check(node, null)) return true;
     }
+    return false;
   }
 
   // Connected components (undirected)
   connectedComponents() {
     const visited = new Set();
     const components = [];
-    for (const v of this.adjacency.keys()) {
-      if (!visited.has(v)) {
-        const component = this.bfs(v);
-        component.forEach(n => visited.add(n));
+    for (const node of this._adj.keys()) {
+      if (!visited.has(node)) {
+        const component = this.bfs(node);
+        for (const n of component) visited.add(n);
         components.push(component);
       }
     }

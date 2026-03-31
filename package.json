@@ -4,7 +4,21 @@
   "description": "Graph data structure from scratch",
   "type": "module",
   "main": "src/index.js",
-  "scripts": { "test": "node --test test/*.test.js" },
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
   "author": "Henry",
-  "license": "MIT"
+  "license": "MIT",
+  "directories": {
+    "test": "test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/henry-the-frog/graph.git"
+  },
+  "keywords": [],
+  "bugs": {
+    "url": "https://github.com/henry-the-frog/graph/issues"
+  },
+  "homepage": "https://github.com/henry-the-frog/graph#readme"
 }
